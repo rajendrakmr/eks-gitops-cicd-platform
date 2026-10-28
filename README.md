@@ -1,114 +1,260 @@
-# ShopStream - polyglot e-commerce microservices
+# EKS GitOps CI/CD Platform
 
-A scalable e-commerce platform built as microservices in **four languages**, backed by **PostgreSQL**, **MongoDB** and **Redis**, with a **Next.js + Redux Toolkit (RTK Query)** frontend and a complete DevOps toolchain (Docker, Compose, Kubernetes + autoscaling, GitHub Actions CI/CD, Prometheus/Grafana).
+### End-to-End CI/CD and GitOps on Amazon EKS
 
+A cloud-native, polyglot e-commerce microservices platform demonstrating end-to-end DevOps practices using **AWS, Amazon EKS, Terraform, Docker, GitHub Actions, Argo CD, Kubernetes, Prometheus, and Grafana**.
+
+This project uses **ShopStream**, a sample e-commerce application, to demonstrate automated build, test, security scanning, container image publishing, GitOps-based deployments, autoscaling, monitoring, and rollback workflows.
+
+## Key Features
+
+- **Infrastructure as Code:** Provision AWS infrastructure using reusable Terraform modules.
+- **Automated CI/CD:** Build, test, scan, and publish container images using GitHub Actions.
+- **GitOps Deployments:** Use Argo CD to synchronize Kubernetes manifests from Git.
+- **Containerization:** Package frontend and backend microservices using Docker.
+- **Kubernetes Orchestration:** Deploy services on Amazon EKS with health probes and rolling updates.
+- **Autoscaling:** Configure Horizontal Pod Autoscalers based on resource utilization.
+- **DevSecOps:** Integrate Trivy, dependency scanning, and static analysis into CI pipelines.
+- **Monitoring and Alerting:** Collect metrics using Prometheus and visualize them through Grafana.
+- **Environment Separation:** Maintain isolated development, staging, and production configurations.
+- **Deployment Safety:** Support rollout validation and rollback procedures.
+
+## Architecture
+
+```text
+                    Developer
+                        |
+                    Git Push / PR
+                        |
+                GitHub Actions CI
+              /         |          \
+          Tests     Security      Build
+                    Scanning       Docker
+                                      |
+                              Container Registry
+                                    (GHCR)
+                                      |
+                              GitOps Repository
+                                      |
+                                   Argo CD
+                                      |
+Internet --> AWS Load Balancer --> Amazon EKS
+                                      |
+                            Kubernetes Ingress
+                                      |
+                                 API Gateway
+                                      |
+                     +----------------+----------------+
+                     |                |                |
+                 Auth Service    Product Service    Order Service
+                  (Node.js)          (Go)             (Python)
+                     |                |                |
+                 PostgreSQL        MongoDB          PostgreSQL
+                     +----------------+----------------+
+                                      |
+                                    Redis
+                                      |
+                         Prometheus + Grafana
 ```
-                    Browser
-                       |
-              nginx (compose) / Ingress (k8s)
-              /                          \
-        Next.js frontend            /api/*  API Gateway (Node.js)
-        (React, Redux Toolkit,        JWT verify - RBAC - Redis rate limit
-         RTK Query)                  /          |            \
-                                    v           v             v
-                         auth-service     product-service   order-service
-                          (Node.js)           (Go)            (Python/FastAPI)
-                            |    \            |    \            |     \
-                            v     v           v     v           v      v
-                       PostgreSQL  Redis   MongoDB  Redis   PostgreSQL  Redis
-                       (users)  (sessions, (catalog) (cache) (orders)  (carts)
-                                 lockout)
-                                              ^                |
-                                              +-- /internal/reserve|release (stock, service-to-service)
+
+> The architecture is a reference design. Configure networking, database connectivity, security policies, and deployment manifests to match the actual implementation.
+
+## Technology Stack
+
+| Area | Technologies |
+|---|---|
+| Cloud | AWS, Amazon EKS, IAM, VPC, ECR or GHCR |
+| Infrastructure as Code | Terraform |
+| CI/CD | GitHub Actions |
+| GitOps | Argo CD |
+| Containers | Docker, Docker Compose |
+| Orchestration | Kubernetes, Helm or Kustomize |
+| Frontend | Next.js, TypeScript, Redux Toolkit, RTK Query |
+| Backend | Node.js, Go, Python, FastAPI |
+| Databases | PostgreSQL, MongoDB, Redis |
+| Security | Trivy, SonarQube, dependency scanning, IAM |
+| Monitoring | Prometheus, Grafana |
+| Scripting | Bash, Python |
+
+## CI/CD Workflow
+
+1. Developer creates a pull request.
+2. GitHub Actions runs unit tests, linting, type checks, and configuration validation.
+3. Security checks scan source code, dependencies, and container images.
+4. After successful validation and merge, Docker images are built and tagged with the commit SHA.
+5. Images are pushed to the configured container registry.
+6. The deployment configuration is updated with the new image tag.
+7. Argo CD detects the Git change and synchronizes the desired state to Amazon EKS.
+8. Kubernetes performs rolling updates and checks readiness.
+9. Prometheus and Grafana provide visibility into application and cluster health.
+10. Failed deployments trigger the configured recovery or rollback procedure.
+
+## GitOps Deployment Model
+
+The Git repository is the source of truth for the desired Kubernetes state.
+
+- Application source code and deployment configuration can be maintained in separate repositories.
+- Argo CD continuously reconciles the cluster with the desired Git state.
+- Image tags should be immutable, preferably based on commit SHAs.
+- Production changes should require review and appropriate approval gates.
+- Rollback can be performed by reverting the Git configuration to a previously validated image version.
+
+## Infrastructure with Terraform
+
+Provision and manage the AWS infrastructure required by the platform:
+
+- VPC, public and private subnets, and routing.
+- IAM roles and policies following least privilege.
+- Amazon EKS cluster and worker nodes.
+- Required security groups and networking configuration.
+- Container registry and supporting resources.
+- Remote Terraform state with locking and access controls.
+
+Keep environment-specific variables and state isolated between development, staging, and production. Never commit credentials or Terraform state containing sensitive values.
+
+## Kubernetes and Reliability
+
+The deployment manifests should support:
+
+- CPU and memory requests and limits.
+- Liveness, readiness, and startup probes where appropriate.
+- Horizontal Pod Autoscaler configuration.
+- Rolling updates and disruption budgets.
+- Pod topology spread and appropriate replica counts.
+- Network policies and non-root container execution.
+- Graceful shutdown and service health validation.
+
+Autoscaling behavior depends on resource requests, workload characteristics, cluster capacity, and metrics availability. Validate these settings through load testing.
+
+## Monitoring and Observability
+
+Use Prometheus and Grafana to monitor:
+
+- Request rate, latency, and error rate.
+- Pod CPU and memory utilization.
+- Pod restarts and failed deployments.
+- Kubernetes node and workload health.
+- Application availability and saturation.
+
+Configure actionable alert rules and validate them under controlled failure scenarios.
+
+## Security Practices
+
+- Use GitHub Actions OIDC to obtain AWS credentials without long-lived AWS access keys.
+- Apply least-privilege IAM policies.
+- Store application secrets in AWS Secrets Manager or another approved secret-management solution.
+- Scan dependencies and container images before deployment.
+- Use protected GitHub environments and required production approvals.
+- Restrict service-to-service access using appropriate network controls.
+- Avoid committing `.env` files, private keys, kubeconfig files, or real secrets.
+
+## Repository Structure
+
+```text
+eks-gitops-cicd-platform/
+├── application/
+│   ├── frontend/
+│   └── services/
+│       ├── api-gateway/
+│       ├── auth-service/
+│       ├── product-service/
+│       └── order-service/
+├── terraform/
+│   ├── modules/
+│   └── environments/
+│       ├── dev/
+│       ├── staging/
+│       └── prod/
+├── k8s/
+│   ├── base/
+│   └── overlays/
+│       ├── dev/
+│       ├── staging/
+│       └── prod/
+├── argocd/
+├── monitoring/
+├── scripts/
+├── docker-compose.yml
+├── Makefile
+└── .github/
+    └── workflows/
+        ├── ci.yml
+        ├── security.yml
+        └── release.yml
 ```
 
-| Service | Language | Data store | Responsibility |
-|---|---|---|---|
-| `frontend` | TypeScript / Next.js 14 | - | Landing, login/register, catalog, product page, cart, user dashboard, admin product management |
-| `api-gateway` | Node.js (Express) | Redis | Single entry point: JWT verification, role checks, identity-header injection, distributed rate limiting, routing |
-| `auth-service` | Node.js | PostgreSQL `auth_db` + Redis | Register/login, rotating refresh tokens, brute-force lockout |
-| `product-service` | Go | MongoDB `products_db` + Redis | Catalog CRUD, search/sort/paginate, read-through cache, atomic stock reservation |
-| `order-service` | Python (FastAPI) | PostgreSQL `orders_db` + Redis | Cart (Redis hashes), checkout with stock reservation + compensation, orders, dashboard stats |
+Adapt the structure to the files that actually exist in the repository. A separate GitOps repository is also a valid approach.
 
-**Why these stores:** PostgreSQL for relational, transactional data (users, orders, money). MongoDB for the flexible, read-heavy catalog. Redis for everything that is fast, expiring or shared across replicas (cache, refresh tokens, carts, rate-limit counters, login lockout).
+## Getting Started
 
-## Quick start (Docker)
+### 1. Clone the repository
 
 ```bash
-make init        # creates .env with generated secrets
-make up          # builds and starts everything -> http://localhost
-make smoke       # end-to-end API checks against the running stack
+git clone https://github.com/<YOUR_GITHUB_USERNAME>/eks-gitops-cicd-platform.git
+cd eks-gitops-cicd-platform
 ```
 
-* Site: http://localhost  - API: http://localhost/api/products
-* Seeded admin: `admin@example.com` / `Admin@12345` (from `.env`; **change it**) - open **/dashboard/products** to manage the catalog.
-* `make scale` runs 3 replicas of the gateway and every backend service behind nginx.
-* `make monitoring` adds Prometheus (http://localhost:9090) and Grafana (http://localhost:3001, `admin` / `GRAFANA_PASSWORD`) with a provisioned dashboard and alert rules.
-* `make logs s=gateway`, `make down`, `make nuke` (also deletes volumes). `make help` lists everything.
+### 2. Run the application locally
 
-## API (all under `/api`)
-
-| Method & path | Access | Notes |
-|---|---|---|
-| `POST /auth/register`, `/auth/login` | public | returns `{user, accessToken, refreshToken}`; login locks after 5 failures / 15 min |
-| `POST /auth/refresh`, `/auth/logout` | public | refresh tokens rotate and are single-use |
-| `GET /auth/me` | user | |
-| `GET /products?search&category&sort&page&limit`, `GET /products/:id`, `GET /categories` | public | `X-Cache: HIT/MISS` header |
-| `POST/PUT/DELETE /products` | admin | invalidates the cache |
-| `GET/POST/PATCH/DELETE /cart[...]` | user | price/name always taken from the catalog, never from the client |
-| `POST /orders`, `GET /orders`, `GET /orders/:id` | user | checkout reserves stock atomically, rolls back on failure |
-| `GET /orders/stats` | user (own) / admin (global) | dashboard numbers |
-| `PATCH /orders/:id/status` | admin | |
-
-## Scalability design
-
-* **Stateless services.** No in-process session or cart state; all shared state is in Redis/Postgres/Mongo, so any service scales horizontally (`--scale` in Compose, HPA in Kubernetes: 2-10 replicas at 70% CPU).
-* **Cache.** Product reads go through Redis. List caches use a *version counter*: any catalog write bumps it, invalidating every cached page in O(1) with no `KEYS`/`SCAN`. Redis outage degrades to direct MongoDB reads. Redis runs `volatile-lru` so only keys with a TTL are evictable.
-* **Rate limiting** is stored in Redis, so the limit is global across gateway replicas (and fails open if Redis is down).
-* **No overselling.** Stock is decremented with a conditional atomic MongoDB update; multi-item checkouts compensate on failure.
-* **Resilience.** Liveness (`/health`) vs readiness (`/ready`) probes, startup probes, graceful shutdown, rolling updates with `maxUnavailable: 0`, PodDisruptionBudgets, topology spread, preStop drain.
-
-## Security notes
-
-* The gateway **discards any client-supplied `X-User-*` header** and sets them only from a verified JWT; services trust those headers, and the `/internal/*` stock endpoints have no gateway route.
-* Kubernetes: default-deny NetworkPolicies, non-root read-only containers, dropped capabilities, seccomp, secrets via `Secret` (use External Secrets / Sealed Secrets in production).
-* Auth service refuses to boot in production with the dev `JWT_SECRET`. Passwords hashed with bcrypt; login timing equalised for unknown users.
-* Known limitation: access tokens are bearer JWTs held in browser memory/storage by the frontend. For stricter XSS posture move tokens to httpOnly cookies.
-
-## Kubernetes
+If the application includes a working Docker Compose configuration:
 
 ```bash
-# 1. set your registry owner and domain
-sed -i 's#ghcr.io/OWNER#ghcr.io/<your-github-user>#g' k8s/*.yaml
-#    edit k8s/30-ingress.yaml (host) and k8s/00-namespace.yaml (PUBLIC_ORIGIN)
-# 2. create secrets
-cp k8s/secret.example.yaml k8s/secret.yaml && $EDITOR k8s/secret.yaml
-# 3. deploy (needs ingress-nginx and metrics-server; k8s >= 1.30 for the native preStop sleep)
-make k8s-apply
-kubectl -n shopstream get pods,hpa
-BASE_URL=https://your-domain make smoke
+make init
+make up
+make smoke
 ```
 
-`k8s/10-datastores.yaml` runs single-replica Postgres/Mongo/Redis StatefulSets for staging. For production use managed databases and remove that file from `kustomization.yaml`; just point the URLs in the service manifests at them.
+Review the Makefile and `.env.example` first; these commands depend on the implemented targets.
 
-## CI/CD (`.github/workflows/ci.yml`)
+### 3. Provision AWS infrastructure
 
-Pull request: per-service tests (Node `node:test`, Go `vet`+`test -race`, Python `pytest` with a Redis service, frontend typecheck/lint/build), `npm audit`, `docker compose config`, and `kubeconform` on the rendered manifests.
-Push to `main`/tag: builds and pushes five images to GHCR (tagged with the commit SHA), Trivy scan. Optional deploy job (set repo variable `DEPLOY_ENABLED=true` and secret `KUBE_CONFIG`): pins images to the commit, applies, waits for rollouts, rolls back on failure. Put required reviewers on the `production` environment for a manual gate.
-
-## Repository layout
-
-```
-frontend/                 Next.js app (store/api.ts = RTK Query endpoints)
-services/api-gateway/     Node.js gateway        services/auth-service/     Node.js
-services/product-service/ Go                     services/order-service/    Python
-infra/                    nginx.conf, Postgres init
-k8s/                      Kustomize manifests (HPA, PDB, NetworkPolicy, Ingress)
-monitoring/               Prometheus config + alerts, Grafana provisioning + dashboard
-scripts/smoke_test.py     End-to-end API test
-docker-compose.yml  Makefile  .env.example  .github/workflows/ci.yml
+```bash
+cd terraform/environments/dev
+terraform init
+terraform validate
+terraform plan
 ```
 
-## Running a service without Docker
+Review the plan and estimated AWS costs before applying infrastructure.
 
-Each service reads its config from environment variables (see `docker-compose.yml`). You need Postgres (`auth_db`, `orders_db`), MongoDB and Redis; then e.g. `cd services/auth-service && npm ci && npm start`, `cd services/product-service && go run .`, `cd services/order-service && uvicorn app.main:app --port 4003`, `cd frontend && npm run dev`.
+### 4. Deploy to Amazon EKS
+
+Configure the AWS account, cluster, container registry, IAM permissions, and GitOps repository. Install Argo CD and configure it to track the appropriate environment path.
+
+Verify the deployment:
+
+```bash
+kubectl get nodes
+kubectl get pods -A
+kubectl get hpa -A
+kubectl get applications -n argocd
+```
+
+These commands require the appropriate cluster access and installed components.
+
+## Project Goals
+
+This project demonstrates practical understanding of:
+
+- Building repeatable cloud infrastructure with Terraform.
+- Designing secure CI/CD pipelines.
+- Deploying microservices to Amazon EKS.
+- Implementing GitOps workflows using Argo CD.
+- Improving application availability through health checks and rolling updates.
+- Monitoring application performance and Kubernetes resources.
+- Applying security scanning and least-privilege access controls.
+
+## Future Improvements
+
+- Progressive delivery using Argo Rollouts for canary and blue-green deployments.
+- Automated integration and load testing.
+- External Secrets Operator integration.
+- OpenTelemetry distributed tracing.
+- Automated disaster recovery and backup validation.
+- Cost monitoring and resource optimization.
+
+## Disclaimer
+
+This repository is intended for learning, portfolio development, and demonstrating cloud-native DevOps patterns. AWS resources may incur charges. Review deployment configuration, security settings, and resource costs before deploying.
+
+**Author:** [Your Name](https://github.com/<YOUR_GITHUB_USERNAME>)
