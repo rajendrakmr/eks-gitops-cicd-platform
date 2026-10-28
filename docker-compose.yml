@@ -1,0 +1,183 @@
+# ShopStream - full stack for local dev / single-host deployments.
+#
+#   make init && make up              # http://localhost
+#   make scale                        # 3x gateway, auth, product, order
+#   docker compose --profile monitoring up -d   # + Prometheus (9090) and Grafana (3001)
+#
+# Data stores:  PostgreSQL (users, orders) | MongoDB (product catalog) | Redis (cache, sessions, carts, rate limits)
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks: [backend]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  # ------------------------------------------------------------------ edge
+  nginx:
+    image: nginx:1.27-alpine
+    <<: *service-defaults
+    networks: [backend, frontend]
+    ports: ["${HTTP_PORT:-80}:80"]
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on: [gateway, frontend]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: /api # same origin via nginx
+        NEXT_PUBLIC_CURRENCY: ${CURRENCY:-USD}
+    <<: *service-defaults
+    deploy:
+      resources: { limits: { memory: 384M } }
+
+  gateway:
+    build: ./services/api-gateway
+    <<: *service-defaults
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+      JWT_SECRET: ${JWT_SECRET:?run 'make init' to create .env}
+      REDIS_URL: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth-service:4001
+      PRODUCT_SERVICE_URL: http://product-service:4002
+      ORDER_SERVICE_URL: http://order-service:4003
+      CORS_ORIGINS: http://localhost,http://localhost:${HTTP_PORT:-80}
+      TRUST_PROXY_HOPS: "1"
+    depends_on:
+      redis: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      product-service: { condition: service_started }
+      order-service: { condition: service_started }
+    deploy:
+      resources: { limits: { memory: 256M } }
+
+  # ------------------------------------------------------------------ services (4 languages)
+  auth-service: # Node.js  -> PostgreSQL (auth_db) + Redis
+    build: ./services/auth-service
+    <<: *service-defaults
+    environment:
+      NODE_ENV: production
+      PORT: "4001"
+      JWT_SECRET: ${JWT_SECRET:?run 'make init' to create .env}
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:?run 'make init'}@postgres:5432/auth_db
+      REDIS_URL: redis://redis:6379
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@12345}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    deploy:
+      resources: { limits: { memory: 256M } }
+
+  product-service: # Go       -> MongoDB (products_db) + Redis cache
+    build: ./services/product-service
+    <<: *service-defaults
+    environment:
+      PORT: "4002"
+      MONGO_URL: mongodb://mongo:27017
+      MONGO_DB: products_db
+      REDIS_URL: redis://redis:6379
+      CACHE_TTL: 60s
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    deploy:
+      resources: { limits: { memory: 128M } }
+
+  order-service: # Python    -> PostgreSQL (orders_db) + Redis carts
+    build: ./services/order-service
+    <<: *service-defaults
+    environment:
+      PORT: "4003"
+      DATABASE_URL: postgresql+psycopg2://postgres:${POSTGRES_PASSWORD:?run 'make init'}@postgres:5432/orders_db
+      REDIS_URL: redis://redis:6379
+      PRODUCT_SERVICE_URL: http://product-service:4002
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      product-service: { condition: service_started }
+    deploy:
+      resources: { limits: { memory: 384M } }
+
+  # ------------------------------------------------------------------ data stores
+  postgres:
+    image: postgres:16-alpine
+    <<: *service-defaults
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run 'make init'}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mongo:
+    image: mongo:7
+    <<: *service-defaults
+    command: ["mongod", "--wiredTigerCacheSizeGB", "0.25"]
+    volumes: [mongodata:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # volatile-lru: only keys WITH a TTL are evictable, so the product-list version counter is never dropped.
+  redis:
+    image: redis:7-alpine
+    <<: *service-defaults
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ------------------------------------------------------------------ observability (opt-in)
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: [monitoring]
+    <<: *service-defaults
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - promdata:/prometheus
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    profiles: [monitoring]
+    <<: *service-defaults
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports: ["3001:3000"]
+    depends_on: [prometheus]
+
+networks:
+  backend:
+  frontend:
+
+volumes:
+  pgdata:
+  mongodata:
+  redisdata:
+  promdata:
+  grafanadata:

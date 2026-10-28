@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shopstream
+  labels:
+    app.kubernetes.io/part-of: shopstream
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shopstream-config
+data:
+  # Browser-visible origin of the site (scheme://host). Used for CORS; change to your real domain.
+  PUBLIC_ORIGIN: "https://shopstream.example.com"
+---
+# Creates auth_db and orders_db on first Postgres start (mirrors infra/postgres/init.sql).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+data:
+  01-init.sql: |
+    CREATE DATABASE auth_db;
+    CREATE DATABASE orders_db;

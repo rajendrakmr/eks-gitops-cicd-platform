@@ -1,0 +1,25 @@
+# Requires an NGINX ingress controller. One origin serves both the site and the API, so CORS is not needed in the browser.
+# For TLS: install cert-manager, uncomment the annotation + tls block and set your host.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shopstream
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 1m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  # tls:
+  #   - hosts: [shopstream.example.com]
+  #     secretName: shopstream-tls
+  rules:
+    - host: shopstream.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend: { service: { name: api-gateway, port: { number: 8080 } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: frontend, port: { number: 3000 } } }

@@ -1,0 +1,52 @@
+{
+  "title": "ShopStream Overview",
+  "uid": "shopstream-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "timeseries", "title": "Gateway requests / s by upstream",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (upstream) (rate(gateway_http_request_duration_seconds_count[1m]))", "legendFormat": "{{upstream}}" }]
+    },
+    {
+      "id": 2, "type": "timeseries", "title": "Gateway p95 latency (s)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le, upstream) (rate(gateway_http_request_duration_seconds_bucket[5m])))", "legendFormat": "{{upstream}}" }]
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "Gateway 5xx / s",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (upstream) (rate(gateway_http_request_duration_seconds_count{status=~\"5..\"}[1m]))", "legendFormat": "{{upstream}}" }]
+    },
+    {
+      "id": 4, "type": "timeseries", "title": "Product cache: hits vs misses / s",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (result) (rate(product_cache_requests_total[1m]))", "legendFormat": "{{result}}" }]
+    },
+    {
+      "id": 5, "type": "stat", "title": "Instances up",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (job) (up{job!=\"prometheus\"})", "legendFormat": "{{job}}" }]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Order service requests / s",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sum by (handler, method) (rate(http_requests_total{job=\"order-service\"}[1m]))", "legendFormat": "{{method}} {{handler}}" }]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Auth p95 latency (s)",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le, route) (rate(auth_http_request_duration_seconds_bucket[5m])))", "legendFormat": "{{route}}" }]
+    }
+  ]
+}

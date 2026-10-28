@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: shopstream
+
+resources:
+  - 00-namespace.yaml   # (the Namespace itself is created here; other objects land in it)
+  - 10-datastores.yaml
+  - 20-auth-service.yaml
+  - 21-product-service.yaml
+  - 22-order-service.yaml
+  - 23-api-gateway.yaml
+  - 24-frontend.yaml
+  - 30-ingress.yaml
+  - 31-networkpolicy.yaml
+
+labels:
+  - pairs: { app.kubernetes.io/part-of: shopstream }
+    includeSelectors: false   # selectors are immutable; never change them via kustomize
+
+# CI rewrites these with the commit SHA:  kustomize edit set image ghcr.io/OWNER/shopstream-frontend=ghcr.io/acme/shopstream-frontend:<sha>
+# Replace OWNER with your GitHub user/org (lower-case) once, here.
+images:
+  - { name: ghcr.io/OWNER/shopstream-auth-service,    newName: ghcr.io/OWNER/shopstream-auth-service,    newTag: latest }
+  - { name: ghcr.io/OWNER/shopstream-product-service, newName: ghcr.io/OWNER/shopstream-product-service, newTag: latest }
+  - { name: ghcr.io/OWNER/shopstream-order-service,   newName: ghcr.io/OWNER/shopstream-order-service,   newTag: latest }
+  - { name: ghcr.io/OWNER/shopstream-api-gateway,     newName: ghcr.io/OWNER/shopstream-api-gateway,     newTag: latest }
+  - { name: ghcr.io/OWNER/shopstream-frontend,        newName: ghcr.io/OWNER/shopstream-frontend,        newTag: latest }

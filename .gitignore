@@ -1,0 +1,11 @@
+.env
+node_modules/
+.next/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.tsbuildinfo
+.venv/
+coverage/
+*.log
+k8s/secret.yaml
