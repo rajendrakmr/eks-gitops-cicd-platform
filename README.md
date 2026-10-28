@@ -190,7 +190,7 @@ Adapt the structure to the files that actually exist in the repository. A separa
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<YOUR_GITHUB_USERNAME>/eks-gitops-cicd-platform.git
+git clone https://github.com/rajendrakmr/eks-gitops-cicd-platform.git
 cd eks-gitops-cicd-platform
 ```
 
