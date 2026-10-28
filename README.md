@@ -257,4 +257,4 @@ This project demonstrates practical understanding of:
 
 This repository is intended for learning, portfolio development, and demonstrating cloud-native DevOps patterns. AWS resources may incur charges. Review deployment configuration, security settings, and resource costs before deploying.
 
-**Author:** [Your Name](https://github.com/<YOUR_GITHUB_USERNAME>)
+**Author:** [Rajendra](https://github.com/rajendrakmr)

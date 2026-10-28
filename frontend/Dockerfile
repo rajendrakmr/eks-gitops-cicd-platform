@@ -4,8 +4,7 @@ COPY package*.json ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 FROM node:20-alpine AS build
-WORKDIR /app
-# NEXT_PUBLIC_* values are inlined into the browser bundle at build time.
+WORKDIR /app 
 ARG NEXT_PUBLIC_API_URL=/api
 ARG NEXT_PUBLIC_CURRENCY=USD
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL NEXT_PUBLIC_CURRENCY=$NEXT_PUBLIC_CURRENCY NEXT_TELEMETRY_DISABLED=1
